@@ -1,0 +1,6 @@
+# Mathmetics
+numpy
+matplotlib
+
+# Simulation
+pygame
