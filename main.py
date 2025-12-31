@@ -1,26 +1,5 @@
+from simdrone import *
 import pygame
-from dataclasses import dataclass
-from typing import Tuple, Optional, List
-
-
-@dataclass
-class DroneParameters:
-    pass
-
-
-class SimDrone:
-    
-    def __init__(self):
-        pass
-    
-    def update(self):
-        pass
-
-    def draw(self):
-        pass
-
-    def reset(self):
-        pass
 
 
 def main():

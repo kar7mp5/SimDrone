@@ -1,6 +1,9 @@
 # Mathmetics
 numpy
 matplotlib
+scipy
 
 # Simulation
 pygame
+PyOpenGL
+PyOpenGL_accelerate
