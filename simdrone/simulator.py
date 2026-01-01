@@ -1,14 +1,33 @@
+# drone.py
+# Copyright 2026 MinSup Kim
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import pygame
 from pygame.locals import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
 import numpy as np
+
+
 from utils import *
 
 from render import Rendering
 from drone import QuadDrone
 from camera import Camera
+
+
 class Simulator:
+
     def __init__(self):
         self.display = (900, 700)
         self.camera = Camera()
@@ -61,7 +80,6 @@ class Simulator:
         # Example external control
         self.drone.state.rotate([0, 35 * dt, 0.6 * 35 * dt])
         self.drone.state.translate([0, 2 * dt, 0])
-
 
     def run(self):
         self.init_opengl()
