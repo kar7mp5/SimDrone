@@ -1,4 +1,4 @@
-from simdrone import *
+from simdrone import Simulator
 
 
 def main():
