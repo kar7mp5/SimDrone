@@ -5,21 +5,19 @@ from OpenGL.GLU import *
 import numpy as np
 from utils import *
 
-from drone import Quadcopter
+from render import Rendering
+from drone import QuadDrone
 from camera import Camera
-
-
-
-
 class Simulator:
     def __init__(self):
         self.display = (900, 700)
         self.camera = Camera()
-        self.drone = Quadcopter()
+        self.renderer = Rendering()
+        self.drone = QuadDrone(gluNewQuadric())
         self.clock = pygame.time.Clock()
-        self.rotation_angle = 0.0
         self.prop_spin = 0.0
         self.running = True
+        self.drones = [self.drone]  # List of drone instances for multiple
 
     def init_opengl(self):
         pygame.init()
@@ -59,8 +57,11 @@ class Simulator:
         keys = pygame.key.get_pressed()
         self.camera.update_rotation(keys, dt)
         self.camera.update_position(keys, dt)
-        self.rotation_angle += 35 * dt
         self.prop_spin += 200 * dt
+        # Example external control
+        self.drone.state.rotate([0, 35 * dt, 0.6 * 35 * dt])
+        self.drone.state.translate([0, 2 * dt, 0])
+
 
     def run(self):
         self.init_opengl()
@@ -68,7 +69,6 @@ class Simulator:
             dt = self.clock.tick(60) / 1000.0
             self.handle_events()
             self.update(dt)
-            self.drone.render_scene(self.camera, self.rotation_angle, self.prop_spin)
+            self.renderer.render_scene(self.camera, self.drones, self.prop_spin)
             pygame.display.flip()
         pygame.quit()
-        quit()

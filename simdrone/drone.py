@@ -6,11 +6,18 @@ import numpy as np
 
 from utils import *
 
+import pygame
+from pygame.locals import *
+from OpenGL.GL import *
+from OpenGL.GLU import *
+import numpy as np
 
-class Quadcopter:
-    def __init__(self):
-        self.quadric = gluNewQuadric()
+
+class QuadDrone:
+    def __init__(self, quadric):
+        self.quadric = quadric
         self.drone_list = None
+        self.state = TransformState()
 
     def init_display_lists(self):
         self.create_drone_display_list()
@@ -45,26 +52,6 @@ class Quadcopter:
         self.draw_landing_gear(-gear_dist / np.sqrt(2), gear_dist / np.sqrt(2))
         self.draw_landing_gear(-gear_dist / np.sqrt(2), -gear_dist / np.sqrt(2))
         glEndList()
-
-    def draw_axes(self, length=1.0):
-        glLineWidth(2.5)
-        glBegin(GL_LINES)
-        glColor3f(1.0, 0.3, 0.3)  # X red
-        glVertex3f(0, 0, 0); glVertex3f(length, 0, 0)
-        glColor3f(0.3, 1.0, 0.3)  # Y green
-        glVertex3f(0, 0, 0); glVertex3f(0, length, 0)
-        glColor3f(0.3, 0.3, 1.0)  # Z blue
-        glVertex3f(0, 0, 0); glVertex3f(0, 0, length)
-        glEnd()
-
-    def draw_grid(self, size=40, step=2):
-        glLineWidth(1.0)
-        glColor3f(0.4, 0.4, 0.4)
-        glBegin(GL_LINES)
-        for i in range(-size, size + 1, step):
-            glVertex3f(i, 0, -size); glVertex3f(i, 0, size)
-            glVertex3f(-size, 0, i); glVertex3f(size, 0, i)
-        glEnd()
 
     def draw_propeller_blade(self, length=0.5, width=0.1, thickness=0.02):
         glBegin(GL_TRIANGLES)
@@ -159,25 +146,3 @@ class Quadcopter:
         self.draw_propeller(prop_dist / np.sqrt(2), -prop_dist / np.sqrt(2), spin_angle + 45)
         self.draw_propeller(-prop_dist / np.sqrt(2), prop_dist / np.sqrt(2), spin_angle + 90)
         self.draw_propeller(-prop_dist / np.sqrt(2), -prop_dist / np.sqrt(2), spin_angle + 135)
-
-    def render_scene(self, camera, rotation_angle, prop_spin):
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-        glLoadIdentity()
-        # World-fixed light
-        light_pos = (10.0, 10.0, 10.0, 1.0)
-        glLightfv(GL_LIGHT0, GL_POSITION, light_pos)
-        # Camera transform
-        camera.apply()
-        # Grid and axes (unlit)
-        glDisable(GL_LIGHTING)
-        glDisable(GL_DEPTH_TEST)
-        self.draw_grid(40, 2)
-        self.draw_axes(2.0)
-        glEnable(GL_DEPTH_TEST)
-        glEnable(GL_LIGHTING)
-        # Drone
-        glPushMatrix()
-        glRotatef(rotation_angle, 0, 1, 0)
-        glRotatef(rotation_angle * 0.6, 1, 0, 0)
-        self.draw_drone(prop_spin)
-        glPopMatrix()
