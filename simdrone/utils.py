@@ -1,4 +1,4 @@
-# utils.py
+# drone.py
 # Copyright 2026 MinSup Kim
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,9 +14,11 @@
 # limitations under the License.
 import numpy as np
 
-from utils import *
 
-
+# Global constants
+MOVE_SPEED = 5.0  # meters per second
+ROT_SPEED = 120.0  # degrees per second
+MOUSE_SENSITIVITY = 0.15  # unused now
 
 
 class TransformState:
