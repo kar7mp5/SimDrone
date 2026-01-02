@@ -12,7 +12,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import pygame
 from pygame.locals import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
@@ -25,51 +24,61 @@ from utils import *
 
 class Rendering:
 
+    """Handles all OpenGL rendering"""
     def __init__(self):
-        pass
+        self.quadric = gluNewQuadric()
 
-    def draw_axes(self, length=2.0):
-        glLineWidth(2.5)
+    def draw_axes(self, length=1.5):
+        glLineWidth(3.0)
         glBegin(GL_LINES)
-        glColor3f(1.0, 0.3, 0.3)  # X red
-        glVertex3f(0, 0, 0); glVertex3f(length, 0, 0)
-        glColor3f(0.3, 1.0, 0.3)  # Y green
-        glVertex3f(0, 0, 0); glVertex3f(0, length, 0)
-        glColor3f(0.3, 0.3, 1.0)  # Z blue
-        glVertex3f(0, 0, 0); glVertex3f(0, 0, length)
+        glColor3f(1.0, 0.0, 0.0); glVertex3f(0,0,0); glVertex3f(length,0,0)
+        glColor3f(0.0, 1.0, 0.0); glVertex3f(0,0,0); glVertex3f(0,length,0)
+        glColor3f(0.0, 0.0, 1.0); glVertex3f(0,0,0); glVertex3f(0,0,length)
         glEnd()
 
     def draw_grid(self, size=40, step=2):
         glLineWidth(1.0)
-        glColor3f(0.4, 0.4, 0.4)
+        glColor3f(0.35, 0.35, 0.4)
         glBegin(GL_LINES)
         for i in range(-size, size + 1, step):
             glVertex3f(i, 0, -size); glVertex3f(i, 0, size)
             glVertex3f(-size, 0, i); glVertex3f(size, 0, i)
         glEnd()
 
-    def render_scene(self, camera, drones, prop_spin):
+    def draw_cube(self, size=1.2):
+        half = size / 2
+        glColor3f(0.85, 0.25, 0.25)
+        glBegin(GL_QUADS)
+        glVertex3f(-half,-half, half); glVertex3f( half,-half, half)
+        glVertex3f( half, half, half); glVertex3f(-half, half, half)
+        glVertex3f(-half,-half,-half); glVertex3f(-half, half,-half)
+        glVertex3f( half, half,-half); glVertex3f( half,-half,-half)
+        glVertex3f(-half,-half, half); glVertex3f(-half, half, half)
+        glVertex3f(-half, half,-half); glVertex3f(-half,-half,-half)
+        glVertex3f( half,-half, half); glVertex3f( half,-half,-half)
+        glVertex3f( half, half,-half); glVertex3f( half, half, half)
+        glVertex3f(-half, half, half); glVertex3f( half, half, half)
+        glVertex3f( half, half,-half); glVertex3f(-half, half,-half)
+        glVertex3f(-half,-half, half); glVertex3f(-half,-half,-half)
+        glVertex3f( half,-half,-half); glVertex3f( half,-half, half)
+        glEnd()
+
+    def render_scene(self, camera, drone):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glLoadIdentity()
-        # World-fixed light
-        light_pos = (10.0, 10.0, 10.0, 1.0)
-        glLightfv(GL_LIGHT0, GL_POSITION, light_pos)
-        # Camera transform
+        glLightfv(GL_LIGHT0, GL_POSITION, (10.0, 10.0, 10.0, 1.0))
         camera.apply()
-        # Grid and axes (unlit)
         glDisable(GL_LIGHTING)
         glDisable(GL_DEPTH_TEST)
-        self.draw_grid(40, 2)
-        self.draw_axes(2.0)
+        self.draw_grid()
         glEnable(GL_DEPTH_TEST)
         glEnable(GL_LIGHTING)
-        # Drones
-        for drone in drones:
-            glPushMatrix()
-            glTranslatef(drone.state.position[0], drone.state.position[1], drone.state.position[2])
-            glRotatef(drone.state.rotation[0], 1, 0, 0)
-            glRotatef(drone.state.rotation[1], 0, 1, 0)
-            glRotatef(drone.state.rotation[2], 0, 0, 1)
-            drone.draw_drone(prop_spin)
-            self.draw_axes(length=2.0)
-            glPopMatrix()
+        # Drone + local axes
+        glPushMatrix()
+        glTranslatef(*drone.state.position)
+        glRotatef(drone.state.rotation[0], 1, 0, 0)
+        glRotatef(drone.state.rotation[1], 0, 1, 0)
+        glRotatef(drone.state.rotation[2], 0, 0, 1)
+        self.draw_cube(size=1.2)
+        self.draw_axes(length=1.6)
+        glPopMatrix()

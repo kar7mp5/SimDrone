@@ -23,136 +23,47 @@ from utils import *
 
 
 
-class QuadDrone:
-    def __init__(self, quadric):
-        self.quadric = quadric
-        self.drone_list = None
+class Drone:
+
+    def __init__(self):
         self.state = TransformState()
+        self.thrust = 0.0
+        self.torques = np.zeros(3)
 
-    def init_display_lists(self):
-        self.create_drone_display_list()
+    def reset(self):
+        self.state.position = np.array([0.0, 0.5, 0.0])
+        self.state.velocity = np.zeros(3)
+        self.state.rotation = np.zeros(3)
+        self.state.angular_velocity = np.zeros(3)
+        self.thrust = 0.0
+        self.torques = np.zeros(3)
 
-    def create_drone_display_list(self):
-        self.drone_list = glGenLists(1)
-        glNewList(self.drone_list, GL_COMPILE)
-        # Central body
-        glPushMatrix()
-        glColor3f(0.8, 0.2, 0.2)  # Reddish body
-        glRotatef(90, 1, 0, 0)
-        gluCylinder(self.quadric, 0.4, 0.4, 0.1, 10, 1)  # Flat cylinder
-        gluDisk(self.quadric, 0, 0.4, 10, 1)  # Top cap
-        glTranslatef(0, 0, 0.1)
-        gluDisk(self.quadric, 0, 0.4, 10, 1)  # Bottom cap
-        glPopMatrix()
-        # Camera pod
-        glPushMatrix()
-        glTranslatef(0, -0.15, 0)
-        glColor3f(0.1, 0.1, 0.1)
-        gluSphere(self.quadric, 0.1, 10, 8)
-        glPopMatrix()
-        # Arms
-        self.draw_arm(45)
-        self.draw_arm(135)
-        self.draw_arm(-45)
-        self.draw_arm(-135)
-        # Landing gear
-        gear_dist = 0.6
-        self.draw_landing_gear(gear_dist / np.sqrt(2), gear_dist / np.sqrt(2))
-        self.draw_landing_gear(gear_dist / np.sqrt(2), -gear_dist / np.sqrt(2))
-        self.draw_landing_gear(-gear_dist / np.sqrt(2), gear_dist / np.sqrt(2))
-        self.draw_landing_gear(-gear_dist / np.sqrt(2), -gear_dist / np.sqrt(2))
-        glEndList()
+    def set_control(self, thrust=0.0, roll=0.0, pitch=0.0, yaw=0.0):
+        self.thrust = np.clip(thrust, 0.0, 1.0)
+        self.torques = np.clip(np.array([roll, pitch, yaw]), -1.0, 1.0)
 
-    def draw_propeller_blade(self, length=0.5, width=0.1, thickness=0.02):
-        glBegin(GL_TRIANGLES)
-        # Simplified blade 1
-        glVertex3f(0, 0, 0)
-        glVertex3f(width/2, thickness/2, length)
-        glVertex3f(-width/2, thickness/2, length)
-        glVertex3f(0, 0, 0)
-        glVertex3f(width/2, -thickness/2, length)
-        glVertex3f(-width/2, -thickness/2, length)
-        # Blade 2 (opposite)
-        glVertex3f(0, 0, 0)
-        glVertex3f(width/2, thickness/2, -length)
-        glVertex3f(-width/2, thickness/2, -length)
-        glVertex3f(0, 0, 0)
-        glVertex3f(width/2, -thickness/2, -length)
-        glVertex3f(-width/2, -thickness/2, -length)
-        glEnd()
+    def update_dynamics(self, dt):
+        # Thrust force in world frame
+        R = self.state.get_rotation_matrix()
+        thrust_body = np.array([0.0, 0.0, -self.thrust * MAX_THRUST])  # Negative for lift (Z down convention)
+        thrust_world = R @ thrust_body
 
-    def draw_propeller(self, x, z, spin_angle, y=0.1, num_blades=2):
-        glPushMatrix()
-        glTranslatef(x, y, z)
-        glRotatef(spin_angle, 0, 1, 0)
-        glColor3f(0.5, 0.5, 0.5)  # Gray for propellers
-        for i in range(num_blades):
-            glPushMatrix()
-            glRotatef(i * 180, 0, 1, 0)
-            self.draw_propeller_blade()
-            glPopMatrix()
-        # Central hub
-        glColor3f(0.3, 0.3, 0.3)
-        gluSphere(self.quadric, 0.05, 10, 8)
-        glPopMatrix()
+        # Gravity
+        gravity = np.array([0.0, -GRAVITY * MASS, 0.0])
 
-    def draw_cube(self, size=1.0):
-        half = size / 2
-        glBegin(GL_QUADS)
-        # Front
-        glVertex3f(-half, -half, half)
-        glVertex3f(half, -half, half)
-        glVertex3f(half, half, half)
-        glVertex3f(-half, half, half)
-        # Back
-        glVertex3f(-half, -half, -half)
-        glVertex3f(-half, half, -half)
-        glVertex3f(half, half, -half)
-        glVertex3f(half, -half, -half)
-        # Left
-        glVertex3f(-half, -half, half)
-        glVertex3f(-half, half, half)
-        glVertex3f(-half, half, -half)
-        glVertex3f(-half, -half, -half)
-        # Right
-        glVertex3f(half, -half, half)
-        glVertex3f(half, -half, -half)
-        glVertex3f(half, half, -half)
-        glVertex3f(half, half, half)
-        # Top
-        glVertex3f(-half, half, half)
-        glVertex3f(half, half, half)
-        glVertex3f(half, half, -half)
-        glVertex3f(-half, half, -half)
-        # Bottom
-        glVertex3f(-half, -half, half)
-        glVertex3f(-half, -half, -half)
-        glVertex3f(half, -half, -half)
-        glVertex3f(half, -half, half)
-        glEnd()
+        # Linear acceleration
+        accel = (thrust_world + gravity) / MASS
 
-    def draw_arm(self, theta, length=1.2, width=0.1, height=0.05):
-        glPushMatrix()
-        glRotatef(theta, 0, 1, 0)
-        glTranslatef(0, height/2, length/2)
-        glScalef(width, height, length)
-        glColor3f(0.7, 0.7, 0.7)  # Lighter gray for arms
-        self.draw_cube()
-        glPopMatrix()
+        # Angular acceleration
+        ang_accel = np.array([
+            self.torques[0] * MAX_TORQUE / IXX,
+            self.torques[1] * MAX_TORQUE / IYY,
+            self.torques[2] * MAX_TORQUE / IZZ
+        ])
 
-    def draw_landing_gear(self, x, z, height=0.3, radius=0.02):
-        glPushMatrix()
-        glTranslatef(x, -height/2, z)
-        glRotatef(90, 1, 0, 0)
-        glColor3f(0.4, 0.4, 0.4)
-        gluCylinder(self.quadric, radius, radius, height, 10, 1)
-        glPopMatrix()
-
-    def draw_drone(self, spin_angle):
-        glCallList(self.drone_list)
-        # Propellers
-        prop_dist = 1.0
-        self.draw_propeller(prop_dist / np.sqrt(2), prop_dist / np.sqrt(2), spin_angle)
-        self.draw_propeller(prop_dist / np.sqrt(2), -prop_dist / np.sqrt(2), spin_angle + 45)
-        self.draw_propeller(-prop_dist / np.sqrt(2), prop_dist / np.sqrt(2), spin_angle + 90)
-        self.draw_propeller(-prop_dist / np.sqrt(2), -prop_dist / np.sqrt(2), spin_angle + 135)
+        # Integrate
+        self.state.velocity += accel * dt
+        self.state.position += self.state.velocity * dt
+        self.state.angular_velocity += ang_accel * dt
+        self.state.rotation += np.degrees(self.state.angular_velocity) * dt
+        self.state.rotation[0] = np.clip(self.state.rotation[0], -89.9, 89.9)
