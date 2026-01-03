@@ -12,171 +12,173 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import matplotlib.pyplot as plt
-import matplotlib.animation as animation
-from multiprocessing import Process, Queue
-import time
+import matplotlib
 import numpy as np
 import tkinter as tk
 from tkinter import ttk
 
-def get_layout_config():
-    """Shows a dialog to select the plotting layout."""
-    layout_choice = {'value': 'per_drone'} # Default
+def get_plot_config():
+    """Shows a dialog to select the plotting layout and display mode."""
+    config = {'layout': 'per_drone', 'mode': 'embedded'}
     
     root = tk.Tk()
     root.title("Plotter Configuration")
-    root.geometry("300x150")
+    root.geometry("350x250")
     
-    # Center the window
     root.eval('tk::PlaceWindow . center')
 
-    lbl = ttk.Label(root, text="Select Plot Layout:")
-    lbl.pack(pady=10)
+    # Layout Selection
+    lbl_layout = ttk.Label(root, text="Select Plot Layout:")
+    lbl_layout.pack(pady=(10, 5))
+    
+    var_layout = tk.StringVar(value='per_drone')
+    ttk.Radiobutton(root, text="Per-Drone View", variable=var_layout, value='per_drone').pack(anchor=tk.W, padx=40)
+    ttk.Radiobutton(root, text="Combined View", variable=var_layout, value='combined').pack(anchor=tk.W, padx=40)
 
-    # Variables
-    selected_layout = tk.StringVar(value='per_drone')
-
-    r1 = ttk.Radiobutton(root, text="Per-Drone View (Separate Rows)", variable=selected_layout, value='per_drone')
-    r1.pack(anchor=tk.W, padx=20)
-
-    r2 = ttk.Radiobutton(root, text="Combined View (All in One)", variable=selected_layout, value='combined')
-    r2.pack(anchor=tk.W, padx=20)
+    # Mode Selection
+    lbl_mode = ttk.Label(root, text="Select Display Mode:")
+    lbl_mode.pack(pady=(15, 5))
+    
+    var_mode = tk.StringVar(value='embedded')
+    ttk.Radiobutton(root, text="Embedded (Unified Window)", variable=var_mode, value='embedded').pack(anchor=tk.W, padx=40)
+    ttk.Radiobutton(root, text="Pop-out (Separate Window)", variable=var_mode, value='pop_out').pack(anchor=tk.W, padx=40)
 
     def on_start():
-        layout_choice['value'] = selected_layout.get()
+        config['layout'] = var_layout.get()
+        config['mode'] = var_mode.get()
         root.destroy()
 
-    btn = ttk.Button(root, text="Start Plotter", command=on_start)
-    btn.pack(pady=15)
+    btn = ttk.Button(root, text="Start Simulation", command=on_start)
+    btn.pack(pady=20)
 
     root.mainloop()
-    return layout_choice['value']
+    return config
 
 
 class RealTimePlotter:
-    def __init__(self, data_queue, num_drones, layout='per_drone'):
-        self.data_queue = data_queue
+    def __init__(self, num_drones, config):
         self.num_drones = num_drones
-        self.layout = layout
+        self.layout = config['layout']
+        self.mode = config['mode']
+        
+        # Configure Backend BEFORE importing pyplot
+        if self.mode == 'embedded':
+            matplotlib.use('Agg')
+        else:
+            try:
+                matplotlib.use('TkAgg')
+            except:
+                pass # Use default
+
+        import matplotlib.pyplot as plt
+        self.plt = plt
+        
+        if self.mode == 'pop_out':
+            self.plt.ion() # Interactive mode for pop-out
+
         self.fig = None
-        self.axes = None # Can be list or numpy array depending on layout
-        self.lines_pos = [] # structure depends on layout? No, let's keep list of [l1,l2,l3] per drone
+        self.axes = None 
+        self.lines_pos = [] 
         self.lines_rot = []
         
-        # Buffers for plotting
+        # Buffers
         self.times = []
         self.pos_data = [[[], [], []] for _ in range(num_drones)] 
         self.rot_data = [[[], [], []] for _ in range(num_drones)]
+        
+        self._init_plot()
 
     def _init_plot(self):
+        dpi = 100
+        if self.mode == 'embedded':
+             figsize = (5, 8) if self.layout == 'combined' else (6, 2.5 * self.num_drones)
+        else:
+             figsize = (8, 6) if self.layout == 'combined' else (10, 3 * self.num_drones)
+
         if self.layout == 'combined':
-            self.fig, self.axes = plt.subplots(2, 1, figsize=(10, 8))
-            self.axes[0].set_title('Position (X, Y, Z)')
-            self.axes[0].set_ylabel('Position (m)')
+            self.fig, self.axes = self.plt.subplots(2, 1, figsize=figsize, dpi=dpi)
+            self.axes[0].set_title('Position')
             self.axes[0].grid(True)
-            self.axes[1].set_title('Rotation (Roll, Pitch, Yaw)')
-            self.axes[1].set_ylabel('Angle (deg)')
-            self.axes[1].set_xlabel('Time (s)')
+            self.axes[1].set_title('Rotation')
             self.axes[1].grid(True)
-            
-            # Helper to get axes
             ax_pos_list = [self.axes[0]] * self.num_drones
             ax_rot_list = [self.axes[1]] * self.num_drones
-            
-        else: # per_drone
-            # nrows=num_drones, ncols=2 (Pos, Rot)
-            self.fig, self.axes = plt.subplots(self.num_drones, 2, figsize=(12, 3 * self.num_drones), squeeze=False)
-            # squeeze=False ensures axes is always 2D array [row][col]
-            
+        else:
+            self.fig, self.axes = self.plt.subplots(self.num_drones, 2, figsize=figsize, squeeze=False, dpi=dpi)
             for i in range(self.num_drones):
-                self.axes[i][0].set_title(f'Drone {i} Position')
-                self.axes[i][0].set_ylabel('m')
+                self.axes[i][0].set_title(f'D{i} Pos')
                 self.axes[i][0].grid(True)
-                
-                self.axes[i][1].set_title(f'Drone {i} Rotation')
-                self.axes[i][1].set_ylabel('deg')
+                self.axes[i][1].set_title(f'D{i} Rot')
                 self.axes[i][1].grid(True)
-                
-                if i == self.num_drones - 1:
-                    self.axes[i][0].set_xlabel('Time (s)')
-                    self.axes[i][1].set_xlabel('Time (s)')
             
             self.fig.tight_layout()
-            
-            # Helper lists so we can just index by drone_id later
             ax_pos_list = [self.axes[i][0] for i in range(self.num_drones)]
             ax_rot_list = [self.axes[i][1] for i in range(self.num_drones)]
 
         colors = ['r', 'g', 'b', 'c', 'm', 'y']
         
         for i in range(self.num_drones):
-            # If combined, use different colors for different drones? Or different linestyles?
-            # Let's use color cycle.
             c = colors[i % len(colors)]
-            
-            # Position
             ax_pos = ax_pos_list[i]
-            l1, = ax_pos.plot([], [], label=f'D{i} X', color=c, linestyle='-')
-            l2, = ax_pos.plot([], [], label=f'D{i} Y', color=c, linestyle='--')
-            l3, = ax_pos.plot([], [], label=f'D{i} Z', color=c, linestyle='-.')
+            l1, = ax_pos.plot([], [], label=f'X', color=c, linestyle='-')
+            l2, = ax_pos.plot([], [], label=f'Y', color=c, linestyle='--')
+            l3, = ax_pos.plot([], [], label=f'Z', color=c, linestyle='-.')
             self.lines_pos.append([l1, l2, l3])
             
-            # Rotation
             ax_rot = ax_rot_list[i]
-            l4, = ax_rot.plot([], [], label=f'D{i} R', color=c, linestyle='-')
-            l5, = ax_rot.plot([], [], label=f'D{i} P', color=c, linestyle='--')
-            l6, = ax_rot.plot([], [], label=f'D{i} Y', color=c, linestyle='-.')
+            l4, = ax_rot.plot([], [], label=f'R', color=c, linestyle='-')
+            l5, = ax_rot.plot([], [], label=f'P', color=c, linestyle='--')
+            l6, = ax_rot.plot([], [], label=f'Y', color=c, linestyle='-.')
             self.lines_rot.append([l4, l5, l6])
 
-        # Legends
-        if self.layout == 'combined':
-            self.axes[0].legend(loc='upper right', fontsize='small', ncol=max(1, self.num_drones//2))
-            self.axes[1].legend(loc='upper right', fontsize='small', ncol=max(1, self.num_drones//2))
-        else:
-            for i in range(self.num_drones):
-                self.axes[i][0].legend(loc='upper right', fontsize='x-small')
-                self.axes[i][1].legend(loc='upper right', fontsize='x-small')
+        # Optimize layout
+        self.fig.tight_layout(pad=2.0)
+        
+    def update_data(self, time_val, drones):
+        self.times.append(time_val)
+        if len(self.times) > 300:
+            self.times.pop(0)
+            for d in range(self.num_drones):
+                for a in range(3):
+                    self.pos_data[d][a].pop(0)
+                    self.rot_data[d][a].pop(0)
 
+        for i, drone in enumerate(drones):
+            pos = drone.state.position
+            rot = drone.state.rotation
+            for j in range(3):
+                self.pos_data[i][j].append(pos[j])
+                self.rot_data[i][j].append(rot[j])
 
-    def _update(self, frame):
-        while not self.data_queue.empty():
-            try:
-                data = self.data_queue.get_nowait()
-                if data is None:
-                    return
-                
-                t = data['time']
-                self.times.append(t)
-                
-                # Keep fixed window
-                if len(self.times) > 500:
-                    self.times.pop(0)
-                    for d in range(self.num_drones):
-                        for a in range(3):
-                            self.pos_data[d][a].pop(0)
-                            self.rot_data[d][a].pop(0)
+    def update_plot(self):
+        """Called when in pop-out mode to refresh the window."""
+        self._update_lines()
+        self._relim()
+        
+        # Interactive update
+        self.fig.canvas.flush_events()
+        # self.plt.pause(0.001) # pause might steal focus or slow things down too much?
+        # canvas.flush_events() is better if we are in main loop control.
+        # But we need to ensure the GUI event loop runs. 
+        # Using pause(0.001) is the standard way to run the GUI loop briefly.
+        self.plt.pause(0.001)
 
-                for i, drone_state in enumerate(data['drones']):
-                    pos = drone_state['position']
-                    rot = drone_state['rotation']
-                    
-                    for j in range(3):
-                        self.pos_data[i][j].append(pos[j])
-                        self.rot_data[i][j].append(rot[j])
+    def render_to_buffer(self):
+        """Called when in embedded mode to get image buffer."""
+        self._update_lines()
+        self._relim()
+        self.fig.canvas.draw()
+        buf = self.fig.canvas.buffer_rgba()
+        width, height = self.fig.canvas.get_width_height()
+        return buf, width, height
 
-            except Exception:
-                pass
-
-        if not self.times:
-            return
-
+    def _update_lines(self):
         for i in range(self.num_drones):
             for j in range(3):
                 self.lines_pos[i][j].set_data(self.times, self.pos_data[i][j])
                 self.lines_rot[i][j].set_data(self.times, self.rot_data[i][j])
 
-        # Autoscale logic
+    def _relim(self):
         if self.layout == 'combined':
              for ax in self.axes:
                 ax.relim()
@@ -186,16 +188,3 @@ class RealTimePlotter:
                 for ax in row:
                     ax.relim()
                     ax.autoscale_view()
-
-    def run(self):
-        self._init_plot()
-        ani = animation.FuncAnimation(self.fig, self._update, interval=100, cache_frame_data=False)
-        plt.show()
-
-def run_plotter(data_queue, num_drones):
-    # Retrieve configuration from GUI
-    layout = get_layout_config()
-    print(f"Starting plotter with layout: {layout}")
-    
-    plotter = RealTimePlotter(data_queue, num_drones, layout=layout)
-    plotter.run()

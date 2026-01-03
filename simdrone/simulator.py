@@ -27,16 +27,27 @@ from render import Rendering
 from drone import Drone
 from render import Rendering
 from drone import Drone
+from render import Rendering
+from drone import Drone
 from camera import Camera
 from logger import Logger
+from plotter import RealTimePlotter, get_plot_config
 
 
 
 
 class Simulator:
     
-    def __init__(self, num_drones=1, plot_queue=None):
-        self.display = (1000, 700)
+    def __init__(self, num_drones=1):
+        # Ask for layout first
+        self.plot_config = get_plot_config()
+        
+        # Window size depends on mode
+        if self.plot_config['mode'] == 'embedded':
+            self.display = (1400, 800)
+        else:
+            self.display = (1000, 700)
+            
         self.camera = Camera()
         self.drones = [Drone() for _ in range(num_drones)]
         self.renderer = Rendering()
@@ -44,7 +55,11 @@ class Simulator:
         self.running = True
         self.logger = Logger()
         self.elapsed_time = 0.0
-        self.plot_queue = plot_queue
+        
+        # Plotter
+        self.plotter = RealTimePlotter(num_drones, config=self.plot_config)
+        self.plot_update_interval = 0.1 # 10Hz
+        self.last_plot_update = 0.0
 
         self.trajectory_queue = None
 
@@ -60,13 +75,14 @@ class Simulator:
         glEnable(GL_LIGHT0)
         glEnable(GL_COLOR_MATERIAL)
         glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)
-        self.set_perspective()
+        self.set_perspective(self.display[0], self.display[1])
 
-    def set_perspective(self):
-        glViewport(0, 0, *self.display)
+    def set_perspective(self, width, height):
+        glViewport(0, 0, int(width), int(height))
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
-        gluPerspective(65, self.display[0]/self.display[1], 0.1, 2000)
+        if height == 0: height = 1
+        gluPerspective(65, width/height, 0.1, 2000)
         glMatrixMode(GL_MODELVIEW)
 
     def handle_events(self):
@@ -80,7 +96,7 @@ class Simulator:
             if event.type == VIDEORESIZE:
                 self.display = event.size
                 pygame.display.set_mode(self.display, DOUBLEBUF | OPENGL | RESIZABLE)
-                self.set_perspective()
+                # self.set_perspective() # Handled in loop
 
     def update(self, dt):
         keys = pygame.key.get_pressed()
@@ -95,22 +111,17 @@ class Simulator:
         self.elapsed_time += dt
         self.logger.log(self.elapsed_time, self.drones)
 
-        if self.plot_queue:
-            # Send data to plotter
-            try:
-                data = {
-                    'time': self.elapsed_time,
-                    'drones': [
-                        {
-                            'position': d.state.position.tolist(),
-                            'rotation': d.state.rotation.tolist()
-                        }
-                        for d in self.drones
-                    ]
-                }
-                self.plot_queue.put_nowait(data)
-            except Exception:
-                pass
+        # Update Plotter Data
+        self.plotter.update_data(self.elapsed_time, self.drones)
+        
+        # Render Plot 
+        if self.elapsed_time - self.last_plot_update > self.plot_update_interval:
+            if self.plot_config['mode'] == 'embedded':
+                buf, w, h = self.plotter.render_to_buffer()
+                self.renderer.update_plot_texture(buf, w, h)
+            else:
+                self.plotter.update_plot()
+            self.last_plot_update = self.elapsed_time
 
     def run(self, result_queue=None):
         self.init_opengl()
@@ -118,7 +129,32 @@ class Simulator:
             dt = self.clock.tick(60) / 1000.0
             self.handle_events()
             self.update(dt)
-            self.renderer.render_scene(self.camera, self.drones)
+            
+            # Clear Full Window
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+            
+            if self.plot_config['mode'] == 'embedded':
+                # Layout Calculation for Embedded
+                # Fixed proportion e.g. 35%
+                plot_w = int(self.display[0] * 0.35)
+                sim_w = self.display[0] - plot_w
+                sim_h = self.display[1]
+                
+                # 1. Render Simulation (Left)
+                glViewport(0, 0, sim_w, sim_h)
+                self.set_perspective(sim_w, sim_h)
+                self.renderer.render_scene(self.camera, self.drones, clear=False) 
+                
+                # 2. Render Plot Overlay (Right)
+                glViewport(0, 0, self.display[0], self.display[1])
+                # Draw rect at (x, y, w, h)
+                self.renderer.draw_plot_overlay(sim_w, 0, plot_w, sim_h, self.display[0], self.display[1])
+            else:
+                # Pop-out mode: Full screen simulation
+                glViewport(0, 0, self.display[0], self.display[1])
+                self.set_perspective(self.display[0], self.display[1])
+                self.renderer.render_scene(self.camera, self.drones, clear=False)
+            
             pygame.display.flip()
 
         pygame.quit()
