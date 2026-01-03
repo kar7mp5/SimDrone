@@ -17,6 +17,7 @@ from pygame.locals import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
 import numpy as np
+import queue
 
 
 from utils import *
@@ -24,20 +25,28 @@ from utils import *
 
 from render import Rendering
 from drone import Drone
+from render import Rendering
+from drone import Drone
 from camera import Camera
+from logger import Logger
 
 
 
 
 class Simulator:
-
-    def __init__(self):
+    
+    def __init__(self, num_drones=1, plot_queue=None):
         self.display = (1000, 700)
         self.camera = Camera()
-        self.drone = Drone()
+        self.drones = [Drone() for _ in range(num_drones)]
         self.renderer = Rendering()
         self.clock = pygame.time.Clock()
         self.running = True
+        self.logger = Logger()
+        self.elapsed_time = 0.0
+        self.plot_queue = plot_queue
+
+        self.trajectory_queue = None
 
     def init_opengl(self):
         pygame.init()
@@ -66,7 +75,8 @@ class Simulator:
                 self.running = False
             if event.type == KEYDOWN:
                 if event.key == K_p:
-                    self.drone.reset()
+                    for drone in self.drones:
+                        drone.reset()
             if event.type == VIDEORESIZE:
                 self.display = event.size
                 pygame.display.set_mode(self.display, DOUBLEBUF | OPENGL | RESIZABLE)
@@ -75,15 +85,46 @@ class Simulator:
     def update(self, dt):
         keys = pygame.key.get_pressed()
         self.camera.update(keys, dt)
-        # Drone controls are set via functions externally
-        self.drone.update_dynamics(dt)
 
-    def run(self):
+        # print(self.drone.state.get_status())
+        # self.trajectory.append(self.drone.state.get_status())
+        # Drone controls are set via functions externally
+        for drone in self.drones:
+            drone.update_dynamics(dt)
+        
+        self.elapsed_time += dt
+        self.logger.log(self.elapsed_time, self.drones)
+
+        if self.plot_queue:
+            # Send data to plotter
+            try:
+                data = {
+                    'time': self.elapsed_time,
+                    'drones': [
+                        {
+                            'position': d.state.position.tolist(),
+                            'rotation': d.state.rotation.tolist()
+                        }
+                        for d in self.drones
+                    ]
+                }
+                self.plot_queue.put_nowait(data)
+            except Exception:
+                pass
+
+    def run(self, result_queue=None):
         self.init_opengl()
         while self.running:
             dt = self.clock.tick(60) / 1000.0
             self.handle_events()
             self.update(dt)
-            self.renderer.render_scene(self.camera, self.drone)
+            self.renderer.render_scene(self.camera, self.drones)
             pygame.display.flip()
+
         pygame.quit()
+        self.logger.save()
+
+        # trajectory = self.trajectory[:]  # copy for safety
+        if result_queue:
+            result_queue.put(self.logger.data)  # Queue
+        return self.logger.data

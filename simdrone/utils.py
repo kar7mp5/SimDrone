@@ -68,3 +68,10 @@ class TransformState:
         cy = np.cos(y)
         sy = np.sin(y)
         return np.array([cy * cp, sy * cp, -sp])
+
+    def get_status(self):
+        return {
+            'position': self.position, 
+            'velociaty': self.velocity, 
+            'rotation': self.rotation
+        }

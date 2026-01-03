@@ -62,7 +62,7 @@ class Rendering:
         glVertex3f( half,-half,-half); glVertex3f( half,-half, half)
         glEnd()
 
-    def render_scene(self, camera, drone):
+    def render_scene(self, camera, drones):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glLoadIdentity()
         glLightfv(GL_LIGHT0, GL_POSITION, (10.0, 10.0, 10.0, 1.0))
@@ -72,16 +72,18 @@ class Rendering:
         self.draw_grid()
         glEnable(GL_DEPTH_TEST)
         glEnable(GL_LIGHTING)
-        # Drone + local axes
-        glPushMatrix()
-        glTranslatef(drone.state.position[1], drone.state.position[0], drone.state.position[2])
-        R = drone.state.get_rotation_matrix()
-        S = np.array([[0, 1, 0], [1, 0, 0], [0, 0, 1]])
-        R_open = S @ R @ S.T
-        mat4 = np.eye(4)
-        mat4[:3, :3] = R_open
-        r_mat = mat4.flatten('F').tolist()
-        glMultMatrixf(r_mat)
-        self.draw_cube(size=1.2)
-        self.draw_axes(length=1.6)
-        glPopMatrix()
+        
+        # Render each drone
+        for drone in drones:
+            glPushMatrix()
+            glTranslatef(drone.state.position[1], drone.state.position[0], drone.state.position[2])
+            R = drone.state.get_rotation_matrix()
+            S = np.array([[0, 1, 0], [1, 0, 0], [0, 0, 1]])
+            R_open = S @ R @ S.T
+            mat4 = np.eye(4)
+            mat4[:3, :3] = R_open
+            r_mat = mat4.flatten('F').tolist()
+            glMultMatrixf(r_mat)
+            self.draw_cube(size=1.2)
+            self.draw_axes(length=1.6)
+            glPopMatrix()
