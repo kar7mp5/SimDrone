@@ -21,40 +21,37 @@ from utils import *
 
 
 
+
 class Camera:
 
     def __init__(self):
-        self.state = TransformState(position=[0.0, 1.5, 12.0])
+        self.state = TransformState(position=[-12.0, 0.0, -1.5])
 
     def update(self, keys, dt):
-        # Rotation: Q/E for yaw, R/F for pitch
         dyaw = (keys[K_q] - keys[K_e]) * ROT_SPEED * dt
         dpitch = (keys[K_r] - keys[K_f]) * ROT_SPEED * dt
         self.state.rotate([dpitch, dyaw, 0])
-
-        # Movement: WASD + Space/Shift
-        forward = np.array([
-            -np.sin(np.deg2rad(self.state.rotation[1])) * np.cos(np.deg2rad(self.state.rotation[0])),
-            np.sin(np.deg2rad(self.state.rotation[0])),
-            -np.cos(np.deg2rad(self.state.rotation[1])) * np.cos(np.deg2rad(self.state.rotation[0])),
-        ])
+        forward = self.state.get_forward()
         forward /= np.linalg.norm(forward) or 1.0
-        right = np.cross(forward, [0, 1, 0])
+        up = np.array([0.0, 0.0, -1.0])
+        right = np.cross(forward, up)
         right /= np.linalg.norm(right) or 1.0
-
         move = np.zeros(3)
         if keys[K_w]: move += forward
         if keys[K_s]: move -= forward
-        if keys[K_a]: move -= right
-        if keys[K_d]: move += right
-        if keys[K_SPACE]: move += [0, 1, 0]
-        if keys[K_LSHIFT]: move -= [0, 1, 0]
-
+        if keys[K_a]: move += right
+        if keys[K_d]: move -= right
+        if keys[K_SPACE]: move += up
+        if keys[K_LSHIFT]: move -= up
         if np.linalg.norm(move) > 0:
             move /= np.linalg.norm(move)
             self.state.translate(move * MOVE_SPEED * dt)
 
     def apply(self):
-        glRotatef(-self.state.rotation[0], 1, 0, 0)
-        glRotatef(-self.state.rotation[1], 0, 1, 0)
-        glTranslatef(-self.state.position[0], -self.state.position[1], -self.state.position[2])
+        forward = self.state.get_forward()
+        center = self.state.position + forward
+        gluLookAt(
+            self.state.position[1], self.state.position[0], self.state.position[2],
+            center[1], center[0], center[2],
+            0, 0, -1
+        )

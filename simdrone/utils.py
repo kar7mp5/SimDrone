@@ -1,4 +1,4 @@
-# drone.py
+# utils.py
 # Copyright 2026 MinSup Kim
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -32,7 +32,7 @@ ROT_SPEED = 90.0
 
 class TransformState:
 
-    def __init__(self, position=[0.0, 0.5, 0.0]):
+    def __init__(self, position=[0.0, 0.0, -0.5]):
         self.position = np.array(position, dtype=float)
         self.velocity = np.zeros(3, dtype=float)
         # Euler angles in degrees: pitch, yaw, roll
@@ -53,21 +53,18 @@ class TransformState:
         cp, sp = np.cos(p), np.sin(p)
         cy, sy = np.cos(y), np.sin(y)
         cr, sr = np.cos(r), np.sin(r)
-
-        # Standard rotation matrix for aerospace convention (body to NED world)
-        R_standard = np.array([
+        R = np.array([
             [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
             [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
             [-sp, cp * sr, cp * cr]
         ])
-
-        # Transformation matrix to map to simulation coordinates (Y up)
-        S = np.array([
-            [1.0, 0.0, 0.0],
-            [0.0, 0.0, -1.0],
-            [0.0, 1.0, 0.0]
-        ])
-
-        # Final rotation matrix in simulation coordinates
-        R = S @ R_standard
         return R
+
+    def get_forward(self):
+        p = np.deg2rad(self.rotation[0])
+        y = np.deg2rad(self.rotation[1])
+        cp = np.cos(p)
+        sp = np.sin(p)
+        cy = np.cos(y)
+        sy = np.sin(y)
+        return np.array([cy * cp, sy * cp, -sp])

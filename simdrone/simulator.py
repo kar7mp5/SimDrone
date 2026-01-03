@@ -1,4 +1,4 @@
-# drone.py
+# simulator.py
 # Copyright 2026 MinSup Kim
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -75,7 +75,6 @@ class Simulator:
     def update(self, dt):
         keys = pygame.key.get_pressed()
         self.camera.update(keys, dt)
-
         # Drone controls are set via functions externally
         self.drone.update_dynamics(dt)
 
@@ -88,4 +87,3 @@ class Simulator:
             self.renderer.render_scene(self.camera, self.drone)
             pygame.display.flip()
         pygame.quit()
-        quit()

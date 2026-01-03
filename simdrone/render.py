@@ -24,7 +24,6 @@ from utils import *
 
 class Rendering:
 
-    """Handles all OpenGL rendering"""
     def __init__(self):
         self.quadric = gluNewQuadric()
 
@@ -41,8 +40,8 @@ class Rendering:
         glColor3f(0.35, 0.35, 0.4)
         glBegin(GL_LINES)
         for i in range(-size, size + 1, step):
-            glVertex3f(i, 0, -size); glVertex3f(i, 0, size)
-            glVertex3f(-size, 0, i); glVertex3f(size, 0, i)
+            glVertex3f(i, -size, 0); glVertex3f(i, size, 0)
+            glVertex3f(-size, i, 0); glVertex3f(size, i, 0)
         glEnd()
 
     def draw_cube(self, size=1.2):
@@ -75,10 +74,14 @@ class Rendering:
         glEnable(GL_LIGHTING)
         # Drone + local axes
         glPushMatrix()
-        glTranslatef(*drone.state.position)
-        glRotatef(drone.state.rotation[0], 1, 0, 0)
-        glRotatef(drone.state.rotation[1], 0, 1, 0)
-        glRotatef(drone.state.rotation[2], 0, 0, 1)
+        glTranslatef(drone.state.position[1], drone.state.position[0], drone.state.position[2])
+        R = drone.state.get_rotation_matrix()
+        S = np.array([[0, 1, 0], [1, 0, 0], [0, 0, 1]])
+        R_open = S @ R @ S.T
+        mat4 = np.eye(4)
+        mat4[:3, :3] = R_open
+        r_mat = mat4.flatten('F').tolist()
+        glMultMatrixf(r_mat)
         self.draw_cube(size=1.2)
         self.draw_axes(length=1.6)
         glPopMatrix()

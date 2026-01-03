@@ -22,7 +22,6 @@ from utils import *
 
 
 
-
 class Drone:
 
     def __init__(self):
@@ -31,7 +30,7 @@ class Drone:
         self.torques = np.zeros(3)
 
     def reset(self):
-        self.state.position = np.array([0.0, 0.5, 0.0])
+        self.state.position = np.array([0.0, 0.0, -0.5])
         self.state.velocity = np.zeros(3)
         self.state.rotation = np.zeros(3)
         self.state.angular_velocity = np.zeros(3)
@@ -45,11 +44,11 @@ class Drone:
     def update_dynamics(self, dt):
         # Thrust force in world frame
         R = self.state.get_rotation_matrix()
-        thrust_body = np.array([0.0, 0.0, -self.thrust * MAX_THRUST])  # Negative for lift (Z down convention)
+        thrust_body = np.array([0.0, 0.0, -self.thrust * MAX_THRUST])  # Negative for lift (body -Z up)
         thrust_world = R @ thrust_body
 
         # Gravity
-        gravity = np.array([0.0, -GRAVITY * MASS, 0.0])
+        gravity = np.array([0.0, 0.0, GRAVITY * MASS])  # +Z down
 
         # Linear acceleration
         accel = (thrust_world + gravity) / MASS
@@ -61,9 +60,19 @@ class Drone:
             self.torques[2] * MAX_TORQUE / IZZ
         ])
 
-        # Integrate
         self.state.velocity += accel * dt
+        
+        # Integrate
+        # Integrate
         self.state.position += self.state.velocity * dt
+
+        # Ground collision (NED: +Z is down, ground at Z=0)
+        if self.state.position[2] > -0.6:
+            self.state.position[2] = -0.6
+            # If moving down (positive velocity), reset to 0
+            if self.state.velocity[2] > 0:
+                self.state.velocity[2] = 0
+
         self.state.angular_velocity += ang_accel * dt
         self.state.rotation += np.degrees(self.state.angular_velocity) * dt
         self.state.rotation[0] = np.clip(self.state.rotation[0], -89.9, 89.9)

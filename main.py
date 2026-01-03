@@ -15,15 +15,18 @@ def main():
     time.sleep(2)
 
     # Pitch forward
-    sim.drone.set_control(thrust=0.28, pitch=0.5)
-    time.sleep(2)
+    sim.drone.set_control(thrust=0.28, pitch=0.001)
+    time.sleep(0.1)
 
-    # Stop pitching, turn yaw
-    sim.drone.set_control(thrust=0.28, pitch=0.0, yaw=0.5)
-    time.sleep(2)
+    # # Stop pitching, turn yaw
+    # sim.drone.set_control(thrust=0.28, pitch=0.0, yaw=0.5)
+    # time.sleep(2)
+    sim.drone.set_control(thrust=0.0)
+    time.sleep(7)
 
     # Stop all
-    sim.drone.set_control(thrust=0.0, yaw=0.0)
+    sim.drone.set_control(thrust=100, yaw=0.0)
+    time.sleep(2)
 
     thread.join()
 
