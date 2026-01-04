@@ -5,7 +5,7 @@ import queue
 import math # For potential use with graph functions if needed
 import numpy as np
 
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSlider, QLabel, QCheckBox, QComboBox, QPushButton, QDoubleSpinBox
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSlider, QLabel, QCheckBox, QComboBox, QPushButton, QDoubleSpinBox, QDialog
 from PyQt6.QtCore import Qt, QTimer
 
 from simdrone import Simulator # Our refactored simulator
@@ -115,6 +115,16 @@ class MainWindow(QMainWindow):
         plot_check.setChecked(True)
         plot_check.stateChanged.connect(self.opengl_widget.toggle_plot)
         controls_layout.addWidget(plot_check)
+
+        # Plot Size Slider
+        plot_size_label = QLabel("Plot Size:")
+        plot_size_slider = QSlider(Qt.Orientation.Horizontal)
+        plot_size_slider.setMinimum(10) # Minimum scale 0.1
+        plot_size_slider.setMaximum(100) # Maximum scale 1.0
+        plot_size_slider.setValue(50) # Initial scale 0.5
+        plot_size_slider.valueChanged.connect(self.opengl_widget.set_plot_scale)
+        controls_layout.addWidget(plot_size_label)
+        controls_layout.addWidget(plot_size_slider)
 
         # Reset Button
         reset_button = QPushButton("Reset Sim")

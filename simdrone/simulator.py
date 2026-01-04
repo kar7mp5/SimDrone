@@ -31,9 +31,9 @@ class Simulator:
 
     def __init__(self, num_drones=1):
         # display will be managed by the PyQt6 OpenGL widget
-            
+        self.num_drones = num_drones # Store num_drones as an attribute
         self.camera = Camera()
-        self.drones = [Drone() for _ in range(num_drones)]
+        self.drones = [Drone() for _ in range(self.num_drones)]
         self.renderer = Rendering()
         self.running = True # This will now be controlled externally, or by a reset
         self.logger = Logger()

@@ -39,6 +39,7 @@ class OpenGLSimulationWidget(QOpenGLWidget):
         self.plot_texture_id = None
         self.plot_width = 0
         self.plot_height = 0
+        self.plot_scale_factor = 0.5 # Initial scale for the embedded plot
 
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus) # Enable key press events
 
@@ -138,19 +139,19 @@ class OpenGLSimulationWidget(QOpenGLWidget):
 
         # Draw the texture in a corner (e.g., bottom-left)
         # Adjust position and size as needed
-        texture_scale = 0.5 # Make it smaller
+        # texture_scale = 0.5 # Replaced by self.plot_scale_factor
         margin = 10
         x = margin
         y = margin
-        width = self.plot_width * texture_scale
-        height = self.plot_height * texture_scale
+        width = self.plot_width * self.plot_scale_factor
+        height = self.plot_height * self.plot_scale_factor
 
         gl.glColor4f(1.0, 1.0, 1.0, 1.0) # White to show original colors
         gl.glBegin(gl.GL_QUADS)
-        gl.glTexCoord2f(0, 0); gl.glVertex2f(x, y)
-        gl.glTexCoord2f(1, 0); gl.glVertex2f(x + width, y)
-        gl.glTexCoord2f(1, 1); gl.glVertex2f(x + width, y + height)
-        gl.glTexCoord2f(0, 1); gl.glVertex2f(x, y + height)
+        gl.glTexCoord2f(0, 1); gl.glVertex2f(x, y) # Top-left of texture maps to bottom-left of quad
+        gl.glTexCoord2f(1, 1); gl.glVertex2f(x + width, y) # Top-right of texture maps to bottom-right of quad
+        gl.glTexCoord2f(1, 0); gl.glVertex2f(x + width, y + height) # Bottom-right of texture maps to top-right of quad
+        gl.glTexCoord2f(0, 0); gl.glVertex2f(x, y + height) # Bottom-left of texture maps to top-left of quad
         gl.glEnd()
 
         gl.glDisable(gl.GL_TEXTURE_2D)
@@ -162,6 +163,11 @@ class OpenGLSimulationWidget(QOpenGLWidget):
         gl.glPopMatrix()
         gl.glMatrixMode(gl.GL_MODELVIEW)
         gl.glPopMatrix()
+
+    def set_plot_scale(self, scale_value):
+        # Scale value from slider (e.g., 1 to 100) needs to be mapped to a float (e.g., 0.1 to 1.0)
+        self.plot_scale_factor = scale_value / 100.0 # Map 1-100 to 0.01-1.0
+        self.update()
 
     def mousePressEvent(self, event: QMouseEvent):
         self.mouse_pressed = True

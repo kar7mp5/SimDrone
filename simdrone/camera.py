@@ -22,15 +22,14 @@ from utils import TransformState # Explicitly import TransformState
 
 class Camera:
     def __init__(self):
-        # Initial position in the simulation world (x, y, z)
-        # Note: Simulation uses (y, x, z) in glTranslatef, so camera position should align.
-        # Let's adjust this for a more standard OpenGL (x, y, z) and adapt apply()
-        self.state = TransformState(position=np.array([0.0, -12.0, -1.5], dtype=np.float32)) # Swapped X and Y for intuition
+        # self.state.position will now represent the "look-at" point or the center of rotation
+        # It corresponds to (North, East, Down) coordinates.
+        self.state = TransformState(position=np.array([0.0, 0.0, 0.0], dtype=np.float32)) 
         
         # Rotations, similar to the reference OpenGLWidget, but applied to the camera's view
-        self.x_rot = 20.0
-        self.y_rot = 30.0
-        self.zoom = -8.0 # This will directly translate to a Z translation in apply()
+        self.x_rot = 20.0 # Pitch
+        self.y_rot = 30.0 # Yaw
+        self.zoom = -12.0 # Distance from the look-at point. Negative for moving back.
         
         # Keyboard input states
         self.keys_pressed = {
@@ -65,63 +64,112 @@ class Camera:
 
 
     def update_position(self, dt):
-        # This method will be called by OpenGLSimulationWidget's timer
-        # Move camera based on currently pressed keys
-        move_speed = 0.5 * dt # Adjust speed as necessary
+        # This method is called by OpenGLSimulationWidget's timer to move the look-at point
+        move_speed = 5.0 * dt # Speed of moving the look-at point in meters per second
         
-        # Calculate forward, right, up vectors based on current rotation
-        # Using OpenGL's own matrix stack is more robust for camera transformations.
-        # Here we'll simulate it for key-based translation in world space.
+        # Calculate camera's forward, right, up vectors based on current rotation
+        # These vectors are relative to the camera's orientation in world space.
         
-        # Reset current transformation to get clean vectors
+        # Construct a temporary rotation matrix based on current camera x_rot and y_rot
+        # to find the camera's local axes in world coordinates.
         gl.glPushMatrix()
         gl.glLoadIdentity()
-        gl.glRotatef(self.x_rot, 1, 0, 0)
-        gl.glRotatef(self.y_rot, 0, 1, 0)
-        
-        # Get orientation matrix
-        modelview = gl.glGetFloatv(gl.GL_MODELVIEW_MATRIX)
-        
-        # Extract forward, right, up vectors from the modelview matrix
-        # For a camera looking down -Z (standard GL), forward is (0,0,-1) transformed
-        forward = np.array([-modelview[0][2], -modelview[1][2], -modelview[2][2]])
-        right = np.array([modelview[0][0], modelview[1][0], modelview[2][0]])
-        up = np.array([modelview[0][1], modelview[1][1], modelview[2][1]])
-        
-        gl.glPopMatrix() # Restore matrix
-        
-        # Normalize vectors (should already be normalized if only rotations were applied)
-        forward = forward / (np.linalg.norm(forward) or 1.0)
-        right = right / (np.linalg.norm(right) or 1.0)
-        up = up / (np.linalg.norm(up) or 1.0) # This 'up' is relative to camera, not world up.
-        
-        # World up is [0,0,1] or [0,0,-1] in standard GL coordinate system.
-        # If simulation's Z is 'up', then world_up_vector = np.array([0,0,1])
-        # For simplicity, let's use fixed world up for up/down movement, or adjust.
-        # For now, let's just use the transformed Y-axis for "up" (vertical motion)
-        
-        # Handle movement
-        if self.keys_pressed[Qt.Key.Key_W]: self.state.position += forward * move_speed
-        if self.keys_pressed[Qt.Key.Key_S]: self.state.position -= forward * move_speed
-        if self.keys_pressed[Qt.Key.Key_A]: self.state.position -= right * move_speed
-        if self.keys_pressed[Qt.Key.Key_D]: self.state.position += right * move_speed
-        
-        # World up/down (assuming Z is vertical in world coordinates)
-        if self.keys_pressed[Qt.Key.Key_Space]: self.state.position[2] += move_speed # Move Up
-        if self.keys_pressed[Qt.Key.Key_Shift]: self.state.position[2] -= move_speed # Move Down
+        gl.glRotatef(self.x_rot, 1, 0, 0) # Apply Pitch
+        gl.glRotatef(self.y_rot, 0, 1, 0) # Apply Yaw
+        view_matrix = gl.glGetFloatv(gl.GL_MODELVIEW_MATRIX)
+        gl.glPopMatrix()
 
-        # Yaw control for drone-like rotation (if needed, currently handled by mouse y_rot)
-        # if self.keys_pressed[Qt.Key.Key_Q]: self.y_rot -= ROT_SPEED * dt # Yaw left
-        # if self.keys_pressed[Qt.Key.Key_E]: self.y_rot += ROT_SPEED * dt # Yaw right
+        # Extract camera's local axes (right, up, forward) from the generated matrix
+        # For a standard OpenGL camera setup (looking down -Z), these are:
+        # Right vector: column 0 of the rotation part
+        # Up vector: column 1 of the rotation part
+        # Forward vector: negated column 2 of the rotation part
+        right_vec = np.array([view_matrix[0][0], view_matrix[1][0], view_matrix[2][0]])
+        up_vec = np.array([view_matrix[0][1], view_matrix[1][1], view_matrix[2][1]])
+        forward_vec = np.array([-view_matrix[0][2], -view_matrix[1][2], -view_matrix[2][2]])
+        
+        # Normalize vectors (should be close to 1 if matrix is pure rotation)
+        right_vec /= (np.linalg.norm(right_vec) or 1.0)
+        up_vec /= (np.linalg.norm(up_vec) or 1.0)
+        forward_vec /= (np.linalg.norm(forward_vec) or 1.0)
 
+        # Apply movement to the look-at point (self.state.position)
+        # Assuming world Z is down axis, and (X,Y) are North-East plane.
+        
+        # Project forward and right vectors onto the X-Y plane for horizontal movement
+        # (assuming X-Y is North-East plane, Z is Down)
+        horizontal_forward = np.array([forward_vec[0], forward_vec[1], 0.0])
+        horizontal_forward /= (np.linalg.norm(horizontal_forward) or 1.0)
+        
+        horizontal_right = np.array([right_vec[0], right_vec[1], 0.0])
+        horizontal_right /= (np.linalg.norm(horizontal_right) or 1.0)
+
+        # W/S move along North-East plane (horizontal_forward)
+        if self.keys_pressed[Qt.Key.Key_W]: self.state.position += horizontal_forward * move_speed
+        if self.keys_pressed[Qt.Key.Key_S]: self.state.position -= horizontal_forward * move_speed
+        # A/D move along North-East plane (horizontal_right)
+        if self.keys_pressed[Qt.Key.Key_A]: self.state.position -= horizontal_right * move_speed
+        if self.keys_pressed[Qt.Key.Key_D]: self.state.position += horizontal_right * move_speed
+        
+        # Vertical movement (along world Down-axis, which is +Z in NED)
+        if self.keys_pressed[Qt.Key.Key_Space]: self.state.position[2] -= move_speed # Move Up (less Down)
+        if self.keys_pressed[Qt.Key.Key_Shift]: self.state.position[2] += move_speed # Move Down (more Down)
 
     def apply(self):
-        # Apply zoom (translate along Z-axis)
-        gl.glTranslatef(0.0, 0.0, self.zoom)
+        # The camera's actual position in world space
+        # Start with the look-at point (self.state.position)
+        # Then move 'zoom' distance along the inverted camera forward vector (backwards from view)
         
-        # Apply rotations
-        gl.glRotatef(self.x_rot, 1, 0, 0) # Pitch (around X-axis)
-        gl.glRotatef(self.y_rot, 0, 1, 0) # Yaw (around Y-axis)
+        # First, define the 'center' or 'look-at' point in world coordinates
+        center_x, center_y, center_z = self.state.position[0], self.state.position[1], self.state.position[2]
+
+        # Calculate camera's eye position based on rotations and zoom from the center point
+        # spherical coordinates-like calculation for simplicity
         
-        # Translate to camera's position (inverse of position because we're moving the world)
-        gl.glTranslatef(-self.state.position[0], -self.state.position[1], -self.state.position[2])
+        # Convert rotations to radians
+        pitch_rad = np.radians(self.x_rot)
+        yaw_rad = np.radians(self.y_rot)
+        
+        # Simplified rotation matrix application (Yaw then Pitch) to a point (0, 0, -zoom)
+        # Point to rotate: (0, 0, -self.zoom) assuming zoom is negative
+        # Or (0, 0, abs(self.zoom)) and move it along rotated -Z axis
+        
+        # Start with camera looking along +Z, distance -zoom (so at 0,0,abs(zoom))
+        # Then rotate around X (pitch), then around Y (yaw)
+        
+        # Vector from center to eye (in center's local coords before rotation)
+        vec_to_eye = np.array([0, 0, self.zoom]) # Camera starts pointing along +Z (Down) in NED frame
+
+        # Convert rotations to radians
+        pitch_rad = np.radians(self.x_rot) # Pitch around Y (East)
+        yaw_rad = np.radians(self.y_rot)   # Yaw around Z (Down)
+
+        # Rotate vec_to_eye by pitch (x_rot) around Y-axis (NED East)
+        pitch_mat = np.array([
+            [np.cos(pitch_rad), 0, np.sin(pitch_rad)],
+            [0, 1, 0],
+            [-np.sin(pitch_rad), 0, np.cos(pitch_rad)]
+        ])
+        vec_to_eye = np.dot(pitch_mat, vec_to_eye)
+
+        # Rotate vec_to_eye by yaw (y_rot) around Z-axis (NED Down)
+        yaw_mat = np.array([
+            [np.cos(yaw_rad), -np.sin(yaw_rad), 0],
+            [np.sin(yaw_rad), np.cos(yaw_rad), 0],
+            [0, 0, 1]
+        ])
+        vec_to_eye = np.dot(yaw_mat, vec_to_eye)
+        
+        # Final eye position in world coordinates (N, E, D)
+        eye_x = center_x + vec_to_eye[0] # North
+        eye_y = center_y + vec_to_eye[1] # East
+        eye_z = center_z + vec_to_eye[2] # Down
+        
+        # 'Up' vector for gluLookAt in NED: (0, 0, -1) means Up is opposite of Down
+        up_x, up_y, up_z = 0.0, 0.0, -1.0
+        
+        gluLookAt(
+            eye_x, eye_y, eye_z,       # Camera position (N, E, D)
+            center_x, center_y, center_z, # Look-at point (N, E, D)
+            up_x, up_y, up_z           # Up vector (N, E, D components)
+        )
