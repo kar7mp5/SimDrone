@@ -3,12 +3,15 @@ import threading
 import time
 import queue
 
+
+
+
 def control_drones(sim):
     """Control logic running in a separate thread."""
     time.sleep(1) # Wait for sim to start
     
     # Drone 0: Hover, Drone 1: Stay
-    sim.drones[0].set_control(thrust=0.3)
+    sim.drones[0].set_control(thrust=3.0, pitch=10.0)
     sim.drones[1].set_control(thrust=0.0) # Stay on ground
     time.sleep(2)
 
@@ -31,8 +34,11 @@ def control_drones(sim):
     sim.drones[0].set_control(thrust=0.0)
     sim.drones[1].set_control(thrust=0.0)
     time.sleep(1)
-    
+
     sim.running = False
+
+
+
 
 def main():
     num_drones = 2

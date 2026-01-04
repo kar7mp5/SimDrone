@@ -30,17 +30,24 @@ class Camera:
     def update(self, keys, dt):
         dyaw = (keys[K_q] - keys[K_e]) * ROT_SPEED * dt
         dpitch = (keys[K_r] - keys[K_f]) * ROT_SPEED * dt
-        self.state.rotate([dpitch, dyaw, 0])
+        
+        self.state.rotate([0, dpitch, dyaw])
         forward = self.state.get_forward()
         forward /= np.linalg.norm(forward) or 1.0
         up = np.array([0.0, 0.0, -1.0])
         right = np.cross(forward, up)
         right /= np.linalg.norm(right) or 1.0
         move = np.zeros(3)
+
+        # FORWARD/BACKWARD
         if keys[K_w]: move += forward
         if keys[K_s]: move -= forward
+        
+        # LEFT/RIGHT
         if keys[K_a]: move += right
         if keys[K_d]: move -= right
+
+        # UP/DOWN
         if keys[K_SPACE]: move += up
         if keys[K_LSHIFT]: move -= up
         if np.linalg.norm(move) > 0:

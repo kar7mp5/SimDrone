@@ -33,47 +33,41 @@ ROT_SPEED = 90.0
 
 
 class TransformState:
-
     def __init__(self, position=[0.0, 0.0, -0.5]):
         self.position = np.array(position, dtype=float)
         self.velocity = np.zeros(3, dtype=float)
-        # Euler angles in degrees: pitch, yaw, roll
+        # Euler angles in degrees: roll, pitch, yaw
         self.rotation = np.zeros(3, dtype=float)
         # Angular velocity in rad/s: p, q, r
         self.angular_velocity = np.zeros(3, dtype=float)
-
     def translate(self, delta):
         self.position += np.array(delta)
-
     def rotate(self, delta_deg):
         self.rotation += np.array(delta_deg)
         self.rotation[0] = np.clip(self.rotation[0], -89.9, 89.9)
-
     def get_rotation_matrix(self):
-        """Convert Euler angles (pitch-yaw-roll) to rotation matrix (body -> world)"""
-        p, y, r = np.deg2rad(self.rotation)
-        cp, sp = np.cos(p), np.sin(p)
-        cy, sy = np.cos(y), np.sin(y)
-        cr, sr = np.cos(r), np.sin(r)
+        """Convert Euler angles (roll-pitch-yaw) to rotation matrix (body -> world)"""
+        phi, theta, psi = np.deg2rad(self.rotation)
+        cphi, sphi = np.cos(phi), np.sin(phi)
+        ctheta, stheta = np.cos(theta), np.sin(theta)
+        cpsi, spsi = np.cos(psi), np.sin(psi)
         R = np.array([
-            [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
-            [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
-            [-sp, cp * sr, cp * cr]
+            [cpsi * ctheta, cpsi * stheta * sphi - spsi * cphi, cpsi * stheta * cphi + spsi * sphi],
+            [spsi * ctheta, spsi * stheta * sphi + cpsi * cphi, spsi * stheta * cphi - cpsi * sphi],
+            [-stheta, ctheta * sphi, ctheta * cphi]
         ])
         return R
-
     def get_forward(self):
-        p = np.deg2rad(self.rotation[0])
-        y = np.deg2rad(self.rotation[1])
-        cp = np.cos(p)
-        sp = np.sin(p)
-        cy = np.cos(y)
-        sy = np.sin(y)
-        return np.array([cy * cp, sy * cp, -sp])
-
+        theta = np.deg2rad(self.rotation[1])
+        psi = np.deg2rad(self.rotation[2])
+        ctheta = np.cos(theta)
+        stheta = np.sin(theta)
+        cpsi = np.cos(psi)
+        spsi = np.sin(psi)
+        return np.array([cpsi * ctheta, spsi * ctheta, -stheta])
     def get_status(self):
         return {
-            'position': self.position, 
-            'velocity': self.velocity, 
+            'position': self.position,
+            'velocity': self.velocity,
             'rotation': self.rotation
         }
