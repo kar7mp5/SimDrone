@@ -7,3 +7,6 @@ scipy
 pygame
 PyOpenGL
 PyOpenGL_accelerate
+
+# UI
+PyQt6

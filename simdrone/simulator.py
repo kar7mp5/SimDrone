@@ -18,7 +18,8 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 import numpy as np
 import queue
-
+from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLineEdit, QTreeWidget, QTreeWidgetItem, QPushButton, QLabel
+from PyQt6.QtCore import Qt
 
 from utils import *
 
@@ -32,12 +33,13 @@ from drone import Drone
 from camera import Camera
 from logger import Logger
 from plotter import RealTimePlotter, get_plot_config
+from settings import SettingsDialog
 
 
 
 
 class Simulator:
-    
+
     def __init__(self, num_drones=1):
         # Ask for layout first
         self.plot_config = get_plot_config()
@@ -93,6 +95,14 @@ class Simulator:
                 if event.key == K_p:
                     for drone in self.drones:
                         drone.reset()
+                if event.key == K_o:  # 'S' 키로 설정 열기
+                    dialog = SettingsDialog(self.config)
+                    if dialog.exec() == QDialog.DialogCode.Accepted:
+                        self.save_config()
+                        # 적용: display 재설정 등 (필요시 restart)
+                        self.display = (self.config['display']['width'], self.config['display']['height'])
+                        self.set_perspective()
+                        self.camera.top_height = self.config['camera']['top_height']
             if event.type == VIDEORESIZE:
                 self.display = event.size
                 pygame.display.set_mode(self.display, DOUBLEBUF | OPENGL | RESIZABLE)

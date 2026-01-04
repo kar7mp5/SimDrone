@@ -14,46 +14,65 @@
 # limitations under the License.
 import matplotlib
 import numpy as np
-import tkinter as tk
-from tkinter import ttk
+from PyQt6.QtWidgets import (
+    QApplication, QDialog, QLabel, QRadioButton, QButtonGroup,
+    QVBoxLayout, QPushButton, QMainWindow, QWidget
+)
+from PyQt6.QtCore import Qt
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+
 
 def get_plot_config():
-    """Shows a dialog to select the plotting layout and display mode."""
+    """Shows a dialog to select the plotting layout and display mode using PyQt."""
     config = {'layout': 'per_drone', 'mode': 'embedded'}
     
-    root = tk.Tk()
-    root.title("Plotter Configuration")
-    root.geometry("350x250")
+    app = QApplication.instance() or QApplication([])
+    dialog = QDialog()
+    dialog.setWindowTitle("Plotter Configuration")
+    dialog.setFixedSize(350, 250)
     
-    root.eval('tk::PlaceWindow . center')
-
+    layout = QVBoxLayout()
+    
     # Layout Selection
-    lbl_layout = ttk.Label(root, text="Select Plot Layout:")
-    lbl_layout.pack(pady=(10, 5))
+    lbl_layout = QLabel("Select Plot Layout:")
+    layout.addWidget(lbl_layout)
     
-    var_layout = tk.StringVar(value='per_drone')
-    ttk.Radiobutton(root, text="Per-Drone View", variable=var_layout, value='per_drone').pack(anchor=tk.W, padx=40)
-    ttk.Radiobutton(root, text="Combined View", variable=var_layout, value='combined').pack(anchor=tk.W, padx=40)
-
+    group_layout = QButtonGroup()
+    rb_per_drone = QRadioButton("Per-Drone View")
+    rb_per_drone.setChecked(True)
+    rb_combined = QRadioButton("Combined View")
+    group_layout.addButton(rb_per_drone)
+    group_layout.addButton(rb_combined)
+    layout.addWidget(rb_per_drone)
+    layout.addWidget(rb_combined)
+    
     # Mode Selection
-    lbl_mode = ttk.Label(root, text="Select Display Mode:")
-    lbl_mode.pack(pady=(15, 5))
+    lbl_mode = QLabel("Select Display Mode:")
+    layout.addWidget(lbl_mode)
     
-    var_mode = tk.StringVar(value='embedded')
-    ttk.Radiobutton(root, text="Embedded (Unified Window)", variable=var_mode, value='embedded').pack(anchor=tk.W, padx=40)
-    ttk.Radiobutton(root, text="Pop-out (Separate Window)", variable=var_mode, value='pop_out').pack(anchor=tk.W, padx=40)
-
+    group_mode = QButtonGroup()
+    rb_embedded = QRadioButton("Embedded (Unified Window)")
+    rb_embedded.setChecked(True)
+    rb_pop_out = QRadioButton("Pop-out (Separate Window)")
+    group_mode.addButton(rb_embedded)
+    group_mode.addButton(rb_pop_out)
+    layout.addWidget(rb_embedded)
+    layout.addWidget(rb_pop_out)
+    
+    # Start Button
+    btn = QPushButton("Start Simulation")
     def on_start():
-        config['layout'] = var_layout.get()
-        config['mode'] = var_mode.get()
-        root.destroy()
-
-    btn = ttk.Button(root, text="Start Simulation", command=on_start)
-    btn.pack(pady=20)
-
-    root.mainloop()
+        config['layout'] = 'per_drone' if rb_per_drone.isChecked() else 'combined'
+        config['mode'] = 'embedded' if rb_embedded.isChecked() else 'pop_out'
+        dialog.accept()
+    btn.clicked.connect(on_start)
+    layout.addWidget(btn)
+    
+    dialog.setLayout(layout)
+    dialog.exec()
+    
     return config
-
 
 class RealTimePlotter:
     def __init__(self, num_drones, config):
@@ -61,60 +80,70 @@ class RealTimePlotter:
         self.layout = config['layout']
         self.mode = config['mode']
         
-        # Configure Backend BEFORE importing pyplot
+        # Configure backend and imports based on mode
         if self.mode == 'embedded':
-            matplotlib.use('Agg')
+            matplotlib.use('Agg')  # Non-interactive for buffer rendering
+            from matplotlib import pyplot as plt
+            self.plt = plt
+            self.fig = Figure(dpi=100)
+            self.canvas = FigureCanvasAgg(self.fig)  # Explicit Agg canvas
+            self.window = None
         else:
-            try:
-                matplotlib.use('TkAgg')
-            except:
-                pass # Use default
-
-        import matplotlib.pyplot as plt
-        self.plt = plt
+            matplotlib.use('QtAgg')  # Interactive for Qt windows
+            from matplotlib import pyplot as plt
+            from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+            self.plt = plt
+            self.fig = Figure(dpi=100)
+            self.canvas = None
+            self.window = None
+            
+            # Ensure QApplication exists before creating widgets
+            app = QApplication.instance() or QApplication([])
+            
+            self.window = QMainWindow()
+            central_widget = QWidget()
+            self.window.setCentralWidget(central_widget)
+            layout = QVBoxLayout(central_widget)
+            self.canvas = FigureCanvas(self.fig)
+            layout.addWidget(self.canvas)
+            self.window.show()
         
-        if self.mode == 'pop_out':
-            self.plt.ion() # Interactive mode for pop-out
-
-        self.fig = None
-        self.axes = None 
-        self.lines_pos = [] 
+        self.axes = None
+        self.lines_pos = []
         self.lines_rot = []
         
         # Buffers
         self.times = []
-        self.pos_data = [[[], [], []] for _ in range(num_drones)] 
+        self.pos_data = [[[], [], []] for _ in range(num_drones)]
         self.rot_data = [[[], [], []] for _ in range(num_drones)]
         
         self._init_plot()
-
+    
     def _init_plot(self):
-        dpi = 100
-        if self.mode == 'embedded':
-             figsize = (5, 8) if self.layout == 'combined' else (6, 2.5 * self.num_drones)
-        else:
-             figsize = (8, 6) if self.layout == 'combined' else (10, 3 * self.num_drones)
-
         if self.layout == 'combined':
-            self.fig, self.axes = self.plt.subplots(2, 1, figsize=figsize, dpi=dpi)
-            self.axes[0].set_title('Position')
-            self.axes[0].grid(True)
-            self.axes[1].set_title('Rotation')
-            self.axes[1].grid(True)
-            ax_pos_list = [self.axes[0]] * self.num_drones
-            ax_rot_list = [self.axes[1]] * self.num_drones
+            gs = self.fig.add_gridspec(2, 1)
+            ax_pos = self.fig.add_subplot(gs[0])
+            ax_rot = self.fig.add_subplot(gs[1])
+            ax_pos.set_title('Position')
+            ax_pos.grid(True)
+            ax_rot.set_title('Rotation')
+            ax_rot.grid(True)
+            ax_pos_list = [ax_pos] * self.num_drones
+            ax_rot_list = [ax_rot] * self.num_drones
         else:
-            self.fig, self.axes = self.plt.subplots(self.num_drones, 2, figsize=figsize, squeeze=False, dpi=dpi)
+            gs = self.fig.add_gridspec(self.num_drones, 2)
+            self.axes = []
             for i in range(self.num_drones):
-                self.axes[i][0].set_title(f'D{i} Pos')
-                self.axes[i][0].grid(True)
-                self.axes[i][1].set_title(f'D{i} Rot')
-                self.axes[i][1].grid(True)
-            
-            self.fig.tight_layout()
+                ax_pos = self.fig.add_subplot(gs[i, 0])
+                ax_rot = self.fig.add_subplot(gs[i, 1])
+                ax_pos.set_title(f'D{i} Pos')
+                ax_pos.grid(True)
+                ax_rot.set_title(f'D{i} Rot')
+                ax_rot.grid(True)
+                self.axes.append((ax_pos, ax_rot))
             ax_pos_list = [self.axes[i][0] for i in range(self.num_drones)]
             ax_rot_list = [self.axes[i][1] for i in range(self.num_drones)]
-
+        
         colors = ['r', 'g', 'b', 'c', 'm', 'y']
         
         for i in range(self.num_drones):
@@ -130,10 +159,9 @@ class RealTimePlotter:
             l5, = ax_rot.plot([], [], label=f'P', color=c, linestyle='--')
             l6, = ax_rot.plot([], [], label=f'Y', color=c, linestyle='-.')
             self.lines_rot.append([l4, l5, l6])
-
-        # Optimize layout
-        self.fig.tight_layout(pad=2.0)
         
+        self.fig.tight_layout(pad=2.0)
+    
     def update_data(self, time_val, drones):
         self.times.append(time_val)
         if len(self.times) > 300:
@@ -142,49 +170,38 @@ class RealTimePlotter:
                 for a in range(3):
                     self.pos_data[d][a].pop(0)
                     self.rot_data[d][a].pop(0)
-
         for i, drone in enumerate(drones):
             pos = drone.state.position
             rot = drone.state.rotation
             for j in range(3):
                 self.pos_data[i][j].append(pos[j])
                 self.rot_data[i][j].append(rot[j])
-
+    
     def update_plot(self):
         """Called when in pop-out mode to refresh the window."""
         self._update_lines()
         self._relim()
+        if self.canvas:
+            self.canvas.draw()
+            QApplication.processEvents()  # Qt 이벤트 루프 처리
         
-        # Interactive update
-        self.fig.canvas.flush_events()
-        # self.plt.pause(0.001) # pause might steal focus or slow things down too much?
-        # canvas.flush_events() is better if we are in main loop control.
-        # But we need to ensure the GUI event loop runs. 
-        # Using pause(0.001) is the standard way to run the GUI loop briefly.
-        self.plt.pause(0.001)
-
     def render_to_buffer(self):
         """Called when in embedded mode to get image buffer."""
         self._update_lines()
         self._relim()
-        self.fig.canvas.draw()
-        buf = self.fig.canvas.buffer_rgba()
-        width, height = self.fig.canvas.get_width_height()
+        self.canvas.draw()  # Render with Agg
+        buf = np.asarray(self.canvas.buffer_rgba())  # Shape: (height, width, 4), RGBA
+        width, height = self.canvas.get_width_height()
         return buf, width, height
-
+    
     def _update_lines(self):
         for i in range(self.num_drones):
             for j in range(3):
                 self.lines_pos[i][j].set_data(self.times, self.pos_data[i][j])
                 self.lines_rot[i][j].set_data(self.times, self.rot_data[i][j])
-
+    
     def _relim(self):
-        if self.layout == 'combined':
-             for ax in self.axes:
-                ax.relim()
-                ax.autoscale_view()
-        else:
-            for row in self.axes:
-                for ax in row:
-                    ax.relim()
-                    ax.autoscale_view()
+        axes_to_update = self.fig.axes if self.layout == 'combined' else [ax for row in self.axes for ax in row]
+        for ax in axes_to_update:
+            ax.relim()
+            ax.autoscale_view()
