@@ -14,99 +14,33 @@
 # limitations under the License.
 import matplotlib
 import numpy as np
+# QApplication, QDialog, etc. imports are no longer needed if get_plot_config is removed
+# QMainWindow, QWidget are also no longer needed in plotter.py
 from PyQt6.QtWidgets import (
-    QApplication, QDialog, QLabel, QRadioButton, QButtonGroup,
-    QVBoxLayout, QPushButton, QMainWindow, QWidget
+    QApplication, # Keep QApplication for processEvents if needed, but not for instance creation
 )
 from PyQt6.QtCore import Qt
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 
 
-def get_plot_config():
-    """Shows a dialog to select the plotting layout and display mode using PyQt."""
-    config = {'layout': 'per_drone', 'mode': 'embedded'}
-    
-    app = QApplication.instance() or QApplication([])
-    dialog = QDialog()
-    dialog.setWindowTitle("Plotter Configuration")
-    dialog.setFixedSize(350, 250)
-    
-    layout = QVBoxLayout()
-    
-    # Layout Selection
-    lbl_layout = QLabel("Select Plot Layout:")
-    layout.addWidget(lbl_layout)
-    
-    group_layout = QButtonGroup()
-    rb_per_drone = QRadioButton("Per-Drone View")
-    rb_per_drone.setChecked(True)
-    rb_combined = QRadioButton("Combined View")
-    group_layout.addButton(rb_per_drone)
-    group_layout.addButton(rb_combined)
-    layout.addWidget(rb_per_drone)
-    layout.addWidget(rb_combined)
-    
-    # Mode Selection
-    lbl_mode = QLabel("Select Display Mode:")
-    layout.addWidget(lbl_mode)
-    
-    group_mode = QButtonGroup()
-    rb_embedded = QRadioButton("Embedded (Unified Window)")
-    rb_embedded.setChecked(True)
-    rb_pop_out = QRadioButton("Pop-out (Separate Window)")
-    group_mode.addButton(rb_embedded)
-    group_mode.addButton(rb_pop_out)
-    layout.addWidget(rb_embedded)
-    layout.addWidget(rb_pop_out)
-    
-    # Start Button
-    btn = QPushButton("Start Simulation")
-    def on_start():
-        config['layout'] = 'per_drone' if rb_per_drone.isChecked() else 'combined'
-        config['mode'] = 'embedded' if rb_embedded.isChecked() else 'pop_out'
-        dialog.accept()
-    btn.clicked.connect(on_start)
-    layout.addWidget(btn)
-    
-    dialog.setLayout(layout)
-    dialog.exec()
-    
-    return config
+# get_plot_config() function is removed as plotter is now always embedded
+# and its configuration is passed directly during initialization.
+
 
 class RealTimePlotter:
     def __init__(self, num_drones, config):
         self.num_drones = num_drones
         self.layout = config['layout']
-        self.mode = config['mode']
+        self.mode = 'embedded' # Force embedded mode for PyQt6 integration
         
-        # Configure backend and imports based on mode
-        if self.mode == 'embedded':
-            matplotlib.use('Agg')  # Non-interactive for buffer rendering
-            from matplotlib import pyplot as plt
-            self.plt = plt
-            self.fig = Figure(dpi=100)
-            self.canvas = FigureCanvasAgg(self.fig)  # Explicit Agg canvas
-            self.window = None
-        else:
-            matplotlib.use('QtAgg')  # Interactive for Qt windows
-            from matplotlib import pyplot as plt
-            from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
-            self.plt = plt
-            self.fig = Figure(dpi=100)
-            self.canvas = None
-            self.window = None
-            
-            # Ensure QApplication exists before creating widgets
-            app = QApplication.instance() or QApplication([])
-            
-            self.window = QMainWindow()
-            central_widget = QWidget()
-            self.window.setCentralWidget(central_widget)
-            layout = QVBoxLayout(central_widget)
-            self.canvas = FigureCanvas(self.fig)
-            layout.addWidget(self.canvas)
-            self.window.show()
+        # Configure backend and imports for embedded mode
+        matplotlib.use('Agg')  # Non-interactive for buffer rendering
+        from matplotlib import pyplot as plt
+        self.plt = plt
+        self.fig = Figure(dpi=100)
+        self.canvas = FigureCanvasAgg(self.fig)  # Explicit Agg canvas
+        self.window = None # No separate window for embedded mode
         
         self.axes = None
         self.lines_pos = []
@@ -120,6 +54,7 @@ class RealTimePlotter:
         self._init_plot()
     
     def _init_plot(self):
+        self.fig.clear() # Clear existing figure content before re-initializing
         if self.layout == 'combined':
             gs = self.fig.add_gridspec(2, 1)
             ax_pos = self.fig.add_subplot(gs[0])
@@ -164,7 +99,7 @@ class RealTimePlotter:
     
     def update_data(self, time_val, drones):
         self.times.append(time_val)
-        if len(self.times) > 300:
+        if len(self.times) > 300: # Limit history
             self.times.pop(0)
             for d in range(self.num_drones):
                 for a in range(3):
@@ -178,19 +113,18 @@ class RealTimePlotter:
                 self.rot_data[i][j].append(rot[j])
     
     def update_plot(self):
-        """Called when in pop-out mode to refresh the window."""
-        self._update_lines()
-        self._relim()
-        if self.canvas:
-            self.canvas.draw()
-            QApplication.processEvents()  # Qt 이벤트 루프 처리
-        
+        """No longer used for embedded mode. It would be used for pop-out to refresh window."""
+        pass # The actual rendering is now done by render_to_buffer
+
     def render_to_buffer(self):
         """Called when in embedded mode to get image buffer."""
         self._update_lines()
         self._relim()
         self.canvas.draw()  # Render with Agg
-        buf = np.asarray(self.canvas.buffer_rgba())  # Shape: (height, width, 4), RGBA
+        # Get raw RGBA buffer
+        buf = self.canvas.buffer_rgba()
+        # Convert to numpy array
+        buf = np.asarray(buf) # Shape: (height, width, 4), RGBA
         width, height = self.canvas.get_width_height()
         return buf, width, height
     
@@ -201,7 +135,11 @@ class RealTimePlotter:
                 self.lines_rot[i][j].set_data(self.times, self.rot_data[i][j])
     
     def _relim(self):
+        # Update plot limits
         axes_to_update = self.fig.axes if self.layout == 'combined' else [ax for row in self.axes for ax in row]
         for ax in axes_to_update:
             ax.relim()
             ax.autoscale_view()
+            # Ensure x-axis shows time
+            if len(self.times) > 0:
+                ax.set_xlim(self.times[0], self.times[-1])
