@@ -74,6 +74,6 @@ class TransformState:
     def get_status(self):
         return {
             'position': self.position, 
-            'velociaty': self.velocity, 
+            'velocity': self.velocity, 
             'rotation': self.rotation
         }
