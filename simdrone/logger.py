@@ -16,6 +16,9 @@ import csv
 import time
 import os
 
+
+
+
 class Logger:
     def __init__(self, filename=None):
         if filename is None:

@@ -23,7 +23,6 @@ from PyQt6.QtCore import Qt
 
 from utils import *
 
-
 from render import Rendering
 from drone import Drone
 from render import Rendering
