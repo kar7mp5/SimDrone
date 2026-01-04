@@ -28,19 +28,16 @@ class SettingsDialog(QDialog):
 
         layout = QVBoxLayout()
 
-        # 검색 바 (VS Code처럼 필터링)
         self.search_bar = QLineEdit()
         self.search_bar.setPlaceholderText("Search settings...")
         self.search_bar.textChanged.connect(self.filter_settings)
         layout.addWidget(self.search_bar)
 
-        # 트리 위젯 (카테고리 + 값)
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(["Setting", "Value"])
         self.tree.setColumnWidth(0, 300)
         layout.addWidget(self.tree)
 
-        # 적용/취소 버튼
         btn_layout = QVBoxLayout()
         apply_btn = QPushButton("Apply")
         apply_btn.clicked.connect(self.apply_changes)
@@ -83,11 +80,10 @@ class SettingsDialog(QDialog):
             for j in range(cat_item.childCount()):
                 child = cat_item.child(j)
                 key = child.text(0)
-                value = child.text(1)  # 편집된 값
-                # 타입 변환 (e.g., int/float)
+                value = child.text(1)
                 try:
                     value = int(value) if value.isdigit() else float(value) if '.' in value else value
                 except:
                     pass
                 self.config[category][key] = value
-        self.accept()  # 다이얼로그 닫기
+        self.accept()
