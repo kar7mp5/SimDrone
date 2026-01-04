@@ -15,6 +15,7 @@
 import csv
 import time
 import os
+import datetime
 
 
 
@@ -22,7 +23,8 @@ import os
 class Logger:
     def __init__(self, filename=None):
         if filename is None:
-            filename = f"log_{int(time.time())}.csv"
+            x = datetime.datetime.now() 
+            filename = f"log_{x.strftime("%Y_%m_%d_%M_%S")}.csv"
         self.filename = filename
         self.data = []
 
